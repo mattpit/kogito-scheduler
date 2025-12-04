@@ -1,0 +1,9 @@
+<solver>
+  <scanAnnotatedClasses/>
+  <solutionClass>org.example.solver.ScheduleSolution</solutionClass>
+  <entityClass>org.example.domain.Job</entityClass>
+  <constraintProviderClass>org.example.solver.ScheduleConstraintProvider</constraintProviderClass>
+  <termination>
+    <spentLimit>5s</spentLimit>
+  </termination>
+</solver>
