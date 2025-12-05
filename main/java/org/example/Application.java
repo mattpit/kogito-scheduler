@@ -8,16 +8,22 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
+import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 import org.example.domain.Job;
 import org.example.domain.Timeslot;
 import org.example.domain.Strategy;
 import org.example.solver.ScheduleSolution;
 import org.optaplanner.core.api.solver.SolverManager;
+
+import java.time.LocalTime;
 
 @Path("/api/schedule")
 public class Application {
@@ -27,6 +33,7 @@ public class Application {
 
     // In-memory cache holding the latest best solution per problemId
     private static final Map<Long, ScheduleSolution> RESULT_CACHE = new ConcurrentHashMap<>();
+
 
     @GET
     @Path("/health")
@@ -43,14 +50,25 @@ public class Application {
     @Path("/solve")
     @Produces(MediaType.TEXT_PLAIN)
     public String solve(@QueryParam("directive") String directive) {
-
-        // --- Build inputs (sample data) ---
-        List<Timeslot> slots = List.of(
+        //
+        // Data - poc - plan
+        //
+       /*  List<Timeslot> slots = List.of(
                 new Timeslot("08:00", "09:00"),
                 new Timeslot("09:00", "10:00"),
                 new Timeslot("10:00", "11:00"),
                 new Timeslot("11:00", "12:00")
         );
+*/
+
+        List<Timeslot> slots = IntStream.range(0, 24 * 60 / 5)
+                .mapToObj(i -> {
+                    LocalTime start = LocalTime.MIN.plusMinutes(i * 5L);
+                    LocalTime end = start.plusMinutes(5);
+                    return new Timeslot("00:00", "23:50"); // Daily period of allowed execution
+                })
+                .collect(Collectors.toList());
+
 
         List<Job> jobs = new ArrayList<>();
         Job etl = new Job(1L, "ETL-A", 60, 2, 4, 11);
@@ -68,7 +86,6 @@ public class Application {
 
         solverManager.solveAndListen(
                 problemId,
-                // Problem supplier (Function<Long, ScheduleSolution>)
                 id -> {
                     ScheduleSolution problem = new ScheduleSolution();
                     problem.setTimeslotList(slots);
@@ -76,17 +93,13 @@ public class Application {
                     problem.setStrategy(strategy);
                     return problem;
                 },
-                // Best solution consumer (BiConsumer<Long, ScheduleSolution>)
-                (id, bestSolution) -> RESULT_CACHE.put(id, bestSolution)
-        );
+                bestSolution -> RESULT_CACHE.put(problemId, bestSolution)
+                );
 
         // Return the problemId immediately; client can poll /result
         return String.valueOf(problemId);
     }
 
-    /**
-     * Retrieve current best solution (HTML). If not yet available, returns a simple "Solving..." page.
-     */
     @GET
     @Path("/result")
     @Produces(MediaType.TEXT_HTML)
